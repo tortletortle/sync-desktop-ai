@@ -1,0 +1,3 @@
+random: useful=3218, unwanted=5609, active=8827, useful_rate=0.365, score/event=-0.0473
+rule: useful=3365, unwanted=1969, active=5334, useful_rate=0.631, score/event=0.0350
+sage: useful=2391, unwanted=1963, active=4354, useful_rate=0.549, score/event=0.0663
