@@ -7,6 +7,11 @@ class TemporalTests(unittest.TestCase):
         self.assertEqual(e.poll(2,authorized=True,dnd=False,condition_exists={"a":True},safe_to_interrupt=True),[])
         self.assertEqual(e.poll(3,authorized=True,dnd=False,condition_exists={"a":True},safe_to_interrupt=True),["a"])
         self.assertEqual(e.tasks["a"].status,Status.READY)
+    def test_ready_offered_once(self):
+        e=TemporalTaskEngine(); e.schedule("a",0,0,10)
+        args=dict(authorized=True,dnd=False,condition_exists={"a":True},safe_to_interrupt=True)
+        self.assertEqual(e.poll(1,**args),["a"])
+        self.assertEqual(e.poll(2,**args),[])
     def test_resolved_before_delivery(self):
         e=TemporalTaskEngine(); e.schedule("a",0,0,10)
         self.assertEqual(e.poll(1,authorized=True,dnd=False,condition_exists={"a":False},safe_to_interrupt=True),[])
