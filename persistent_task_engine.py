@@ -1,7 +1,7 @@
 """Crash-recoverable deferred-task lifecycle backed by SQLite."""
 from dataclasses import replace
 
-from sqlite_task_store import SQLiteTaskStore
+from sqlite_task_store import SQLiteTaskStore, TaskStoreConflict
 from temporal_engine import DeferredTask, Status
 
 
@@ -58,9 +58,14 @@ class PersistentTemporalTaskEngine:
         existing = self.store.get_task(task_id)
         if existing is not None:
             # A task ID is an idempotency key for its entire lifetime, including
-            # terminal states. Never resurrect a completed/cancelled task.
+            # terminal states. Refresh and re-read to avoid returning a stale row.
             self.refresh()
             self._clock(now)
+            existing = self.store.get_task(task_id)
+            if existing is None:
+                raise TaskStoreConflict("task disappeared while refreshing")
+            # The empty commit advances the persisted clock and validates that
+            # no concurrent writer changed the snapshot after refresh.
             self._commit(now)
             return existing
 
