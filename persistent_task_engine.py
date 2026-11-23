@@ -47,8 +47,7 @@ class PersistentTemporalTaskEngine:
 
     def schedule(self, task_id: str, now: int, delay: int, ttl: int) -> DeferredTask:
         self._clock(now)
-        if not isinstance(task_id, str) or not task_id:
-            raise ValueError("task_id must be a non-empty opaque string")
+        self.store.validate_task_id(task_id)
         for value, label in ((delay, "delay"), (ttl, "ttl")):
             if isinstance(value, bool) or not isinstance(value, int):
                 raise ValueError(label + " must be an integer")
@@ -78,8 +77,9 @@ class PersistentTemporalTaskEngine:
 
     def cancel(self, task_id: str, reason: str, now: int) -> bool:
         self._clock(now)
-        if not isinstance(reason, str) or not reason:
-            raise ValueError("reason must be a non-empty string")
+        self.store.validate_reason_code(reason)
+        if reason is None:
+            raise ValueError("reason code is required for cancellation")
         task = self.tasks.get(task_id)
         if task is None:
             self._commit(now)
@@ -96,7 +96,7 @@ class PersistentTemporalTaskEngine:
             self._commit(now)
             return False
         updated = replace(
-            task, status=Status.RESOLVED, reason="condition no longer exists"
+            task, status=Status.RESOLVED, reason="condition_cleared"
         )
         self._commit(now, updates=(updated,))
         self.tasks.pop(task_id, None)
@@ -109,6 +109,10 @@ class PersistentTemporalTaskEngine:
             raise ValueError("authorized and dnd must be booleans")
         if not isinstance(safe_to_interrupt, bool):
             raise ValueError("safe_to_interrupt must be boolean")
+        if not isinstance(condition_exists, dict) or any(
+            not isinstance(value, bool) for value in condition_exists.values()
+        ):
+            raise ValueError("condition_exists must map task IDs to booleans")
 
         ready = []
         active_after = {}
@@ -117,13 +121,13 @@ class PersistentTemporalTaskEngine:
             updated = replace(task)
             if not authorized or dnd:
                 updated.status = Status.CANCELLED
-                updated.reason = "permission revoked" if not authorized else "do not disturb"
+                updated.reason = "permission_revoked" if not authorized else "do_not_disturb"
             elif now >= task.expires_at:
                 updated.status = Status.EXPIRED
-                updated.reason = "ttl elapsed"
+                updated.reason = "ttl_elapsed"
             elif condition_exists.get(task.task_id) is False:
                 updated.status = Status.RESOLVED
-                updated.reason = "condition cleared"
+                updated.reason = "condition_cleared"
             elif (now >= task.due_at and safe_to_interrupt
                   and condition_exists.get(task.task_id) is True and not task.offered):
                 updated.status = Status.READY

@@ -50,7 +50,7 @@ class PersistentEngineTests(unittest.TestCase):
 
     def test_terminal_task_id_is_not_resurrected(self):
         self.engine.schedule("opaque-a", 100, 0, 20)
-        self.assertTrue(self.engine.cancel("opaque-a", "user cancelled", 101))
+        self.assertTrue(self.engine.cancel("opaque-a", "user_cancelled", 101))
         returned = self.engine.schedule("opaque-a", 102, 0, 20)
         self.assertEqual(returned.status, Status.CANCELLED)
         self.assertNotIn("opaque-a", self.engine.tasks)
@@ -65,7 +65,7 @@ class PersistentEngineTests(unittest.TestCase):
         restarted = self.reopen()
         self.assertNotIn("opaque-a", restarted.tasks)
         self.assertEqual(self.store.get_task("opaque-a").status, Status.CANCELLED)
-        self.assertEqual(self.store.get_task("opaque-a").reason, "permission revoked")
+        self.assertEqual(self.store.get_task("opaque-a").reason, "permission_revoked")
 
     def test_do_not_disturb_cancels_persisted_tasks(self):
         self.engine.schedule("opaque-a", 100, 0, 20)
@@ -73,7 +73,7 @@ class PersistentEngineTests(unittest.TestCase):
             101, authorized=True, dnd=True,
             condition_exists={"opaque-a": True}, safe_to_interrupt=True
         )
-        self.assertEqual(self.store.get_task("opaque-a").reason, "do not disturb")
+        self.assertEqual(self.store.get_task("opaque-a").reason, "do_not_disturb")
         self.assertEqual(self.reopen().tasks, {})
 
     def test_expiry_is_persisted(self):
@@ -107,7 +107,7 @@ class PersistentEngineTests(unittest.TestCase):
         self.engine.schedule("opaque-a", 100, 0, 20)
         restarted = self.reopen()
         with self.assertRaises(ValueError):
-            restarted.cancel("opaque-a", "late clock", 99)
+            restarted.cancel("opaque-a", "user_cancelled", 99)
 
     def test_stale_writer_must_refresh_before_retry(self):
         second = self.reopen()
@@ -127,7 +127,7 @@ class PersistentEngineTests(unittest.TestCase):
 
     def test_failed_batch_rolls_back_all_rows_and_revision(self):
         missing = DeferredTask(
-            "missing", 100, 100, 110, Status.CANCELLED, False, "test"
+            "missing", 100, 100, 110, Status.CANCELLED, False, None
         )
         with self.assertRaises(TaskStoreConflict):
             self.store.commit(
@@ -147,6 +147,13 @@ class PersistentEngineTests(unittest.TestCase):
         restarted = self.reopen(max_pending=1)
         with self.assertRaises(OverflowError):
             restarted.schedule("b", 101, 0, 20)
+
+    def test_sensitive_text_is_rejected_from_task_metadata(self):
+        with self.assertRaises(ValueError):
+            self.engine.schedule("private document title", 100, 0, 10)
+        self.engine.schedule("opaque-a", 100, 0, 10)
+        with self.assertRaises(ValueError):
+            self.engine.cancel("opaque-a", "private document title", 101)
 
     def test_invalid_time_and_task_parameters_fail_closed(self):
         with self.assertRaises(ValueError):

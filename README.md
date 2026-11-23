@@ -29,7 +29,7 @@ The original in-memory engine remains available as TemporalTaskEngine. For crash
     now = int(time.time())  # UTC epoch seconds for persistent deadlines
     engine.schedule("opaque-task-id", now, delay=60, ttl=3600)
 
-The persistent engine commits each lifecycle operation atomically, restores active tasks on startup, remembers READY/offered state, and uses a revision check to reject stale concurrent writers. Call engine.refresh() after TaskStoreConflict before retrying. Task IDs must be opaque and must not contain screen text, prompts, filenames, or other sensitive content.
+The persistent engine commits each lifecycle operation atomically, restores active tasks on startup, remembers READY/offered state, and uses a revision check to reject stale concurrent writers. Call engine.refresh() after TaskStoreConflict before retrying. Task IDs must be short opaque ASCII tokens; cancellation reasons are allowlisted stable codes. Never store screen text, prompts, filenames, window titles, or other sensitive content in task IDs or reason fields.
 
 Clock contract: the persistent engine accepts non-decreasing UTC epoch seconds, not time.monotonic(). This allows deadlines to survive process and machine restarts. If the system clock moves backwards, operations fail closed until the clock catches up or an operator resolves the condition.
 

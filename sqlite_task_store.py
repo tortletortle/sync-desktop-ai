@@ -9,6 +9,12 @@ class TaskStoreConflict(RuntimeError):
 
 
 class SQLiteTaskStore:
+    SAFE_REASON_CODES = frozenset({
+        "user_cancelled", "user_requested", "host_cancelled",
+        "permission_revoked", "do_not_disturb", "ttl_elapsed",
+        "condition_cleared", "dnd",
+    })
+
     def __init__(self, path):
         self.path = str(path)
         Path(self.path).parent.mkdir(parents=True, exist_ok=True)
@@ -41,17 +47,22 @@ class SQLiteTaskStore:
         return db
 
     @staticmethod
-    def _row_to_task(row):
-        return DeferredTask(
-            row[0], row[1], row[2], row[3], Status(row[4]), bool(row[5]), row[6]
-        )
+    def validate_task_id(task_id):
+        if (not isinstance(task_id, str) or not task_id or len(task_id) > 128
+                or not task_id.isascii()
+                or not all(ch.isalnum() or ch in "-_." for ch in task_id)):
+            raise ValueError("task_id must be a short opaque ASCII token")
 
-    @staticmethod
-    def _validate_task(task):
+    @classmethod
+    def validate_reason_code(cls, reason):
+        if reason is not None and reason not in cls.SAFE_REASON_CODES:
+            raise ValueError("reason must be an approved stable code, not free-form text")
+
+    @classmethod
+    def _validate_task(cls, task):
         if not isinstance(task, DeferredTask):
             raise ValueError("task must be a DeferredTask")
-        if not isinstance(task.task_id, str) or not task.task_id:
-            raise ValueError("task_id must be a non-empty opaque string")
+        cls.validate_task_id(task.task_id)
         for value in (task.created_at, task.due_at, task.expires_at):
             if isinstance(value, bool) or not isinstance(value, int) or value < 0:
                 raise ValueError("task timestamps must be non-negative integers")
@@ -61,6 +72,13 @@ class SQLiteTaskStore:
             raise ValueError("invalid task status")
         if not isinstance(task.offered, bool):
             raise ValueError("offered must be boolean")
+        cls.validate_reason_code(task.reason)
+
+    @staticmethod
+    def _row_to_task(row):
+        return DeferredTask(
+            row[0], row[1], row[2], row[3], Status(row[4]), bool(row[5]), row[6]
+        )
 
     def save(self, task: DeferredTask):
         """Legacy upsert API; bumps revision so active engines detect external writes."""
@@ -179,6 +197,8 @@ class SQLiteTaskStore:
         return next_revision
 
     def update_status(self, task_id, status: Status, reason=None, offered=None):
+        self.validate_task_id(task_id)
+        self.validate_reason_code(reason)
         offered_value = None if offered is None else int(offered)
         with self._connect() as db:
             cursor = db.execute("""UPDATE deferred_tasks
