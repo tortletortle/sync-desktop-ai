@@ -55,7 +55,9 @@ class SQLiteTaskStore:
 
     @classmethod
     def validate_reason_code(cls, reason):
-        if reason is not None and reason not in cls.SAFE_REASON_CODES:
+        if reason is not None and (
+            not isinstance(reason, str) or reason not in cls.SAFE_REASON_CODES
+        ):
             raise ValueError("reason must be an approved stable code, not free-form text")
 
     @classmethod

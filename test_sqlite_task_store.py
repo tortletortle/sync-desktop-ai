@@ -21,7 +21,7 @@ class StoreTests(unittest.TestCase):
     def test_status_update(self):
         self.db.save(DeferredTask("a",1,2,8))
         self.assertTrue(self.db.update_status("a",Status.CANCELLED,"permission_revoked"))
-        self.assertFalse(self.db.update_status("a",Status.RESOLVED,"late"))
+        self.assertFalse(self.db.update_status("a",Status.RESOLVED,"ttl_elapsed"))
         self.assertEqual(self.db.load_active(),[])
     def test_missing_update(self):
         self.assertFalse(self.db.update_status("missing",Status.RESOLVED))
