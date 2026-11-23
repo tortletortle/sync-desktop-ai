@@ -17,6 +17,7 @@ class DeferredTask:
     due_at: int
     expires_at: int
     status: Status = Status.PENDING
+    offered: bool = False
     reason: Optional[str] = None
 
 class TemporalTaskEngine:
@@ -78,7 +79,8 @@ class TemporalTaskEngine:
                 task.status=Status.EXPIRED; task.reason="ttl elapsed"; continue
             if condition_exists.get(task.task_id) is False:
                 task.status=Status.RESOLVED; task.reason="condition cleared"; continue
-            if now >= task.due_at and safe_to_interrupt and condition_exists.get(task.task_id) is True:
+            if now >= task.due_at and safe_to_interrupt and condition_exists.get(task.task_id) is True and not task.offered:
                 task.status=Status.READY
+                task.offered=True
                 ready.append(task.task_id)
         return ready
